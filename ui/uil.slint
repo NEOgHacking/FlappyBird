@@ -1,0 +1,243 @@
+import { VerticalBox } from "std-widgets.slint";
+
+export struct Tube_pos {
+    top_y_pos: int,
+    bot_y_pos: int,
+    x_pos: int,    
+}
+// For your app to use your UI, it has to export a component that inherits Window
+export component FlappyBirdUI inherits Window {
+    // These are the dimensions of the physical screen
+    width: 320px;
+    height: 240px;
+
+    // This is a reactive property that we will set from our app's logic code
+    in-out property <int> count: 0;
+    in property <[Tube_pos]> Tubes;
+    in property <int> Bird_y: 90;
+    in property <bool> Bird_Faling: false;
+    in property <bool> LevelSelect: true;
+    in property <int> Level: 0;
+    in property <bool> Died: false;
+
+    // The background
+    VerticalLayout {
+        alignment: start;
+      Rectangle {
+        width: parent.width;
+        height: 190px;
+        background: #00797d;
+      }
+      Rectangle {
+        width: parent.width;
+        height: 20px;
+        background: #cedde0d2;
+      }
+      Rectangle {
+        width: parent.width;
+        height: 30px;
+        background: #0d8500;
+      }
+    }
+
+    // White dots on background
+    for _[row] in 16: Rectangle {
+        x: row * 20px;
+        y: 210px + mod((row * 314234567px + 1px), 19px);
+        width: 5px;
+        height: 5px;
+        background: #e6dcdc;
+    }
+
+    // Sun
+    Rectangle {
+        width: 100px;
+        height: 100px;
+        border-radius: 100px;
+        x: -50px;
+        y: -50px;
+        background: #d0bc00;
+    }
+
+    for _[i] in 10: Rectangle {
+        width: 30px;
+        height: 4px;
+        x: -10px + cos(i * 10deg) * 70px;
+        y: 2px + sin(i * 10deg) * 70px;
+        transform-rotation: i * 10deg;
+        background: #d0bc00;
+    }
+
+    // Tubes
+
+    for Tube in root.Tubes: Rectangle{
+            Rectangle {
+            width: 36px;
+            height: 240px;
+            x: Tube.x-pos * 1px;
+            y: Tube.bot-y-pos * 1px + 19px + 30px;
+            background: #55ff00;
+            border-width: 3px;
+            border-color: black;
+        }
+
+        Rectangle {
+            width: 36px;
+            height: 240px;
+            x: Tube.x-pos * 1px;
+            y: Tube.top-y-pos * 1px - 20px - 240px;
+            background: #55ff00;
+            border-width: 3px;
+            border-color: black;
+        }
+
+        Rectangle {
+            width: 46px;
+            height: 22px;
+            x: Tube.x-pos * 1px - 5px;
+            y: Tube.bot-y-pos * 1px + 30px;
+            background: #55ff00;
+            border-width: 3px;
+            border-color: black;
+            border-radius: 5px;
+        }
+
+        Rectangle {
+            width: 46px;
+            height: 22px;
+            x: Tube.x-pos * 1px - 5px;
+            y: Tube.top-y-pos * 1px - 22px;
+            background: #55ff00;
+            border-width: 3px;
+            border-color: black;
+            border-radius: 5px;
+        }
+    }
+
+    // Da bird
+    Rectangle {
+        width: 30px;
+        height: 30px;
+        background: yellow;
+        border-width: 3px;
+        border-color: black;
+        border-radius: 13px;
+        x: 40px;
+        y: root.Bird_y * 1px;
+        
+        // Eyeball
+        Rectangle {
+            width: 15px;
+            height: 15px;
+            background: white;
+            x: 15px;
+            y: 4px;
+            border-width: 3px;
+            border-color: black;
+            border-radius: 7px;
+
+            // Pupil
+            Rectangle {
+                width: 4px;
+                height: 4px;
+                background: black;
+                x: 7px;
+                border-radius: 3px;
+            }
+        }
+
+        // Wing
+        Rectangle {
+            width: 20px;
+            height: 17px;
+            background: yellow;
+            x: -4px;
+            y: 10px;
+            border-width: 3px;
+            border-color: black;
+            border-radius: 8px;
+            border-top-left-radius: 2px;
+        }
+        
+        // Mouth
+        Rectangle {
+            width: 20px;
+            height: 7px;
+            background: red;
+            x: 15px;
+            y: 16px;
+            border-width: 2px;
+            border-color: black;
+            border-radius: 7px;
+        }
+        Rectangle {
+            width: 17px;
+            height: 7px;
+            background: red;
+            x: 15px;
+            y: 21px;
+            border-width: 2px;
+            border-color: black;
+            border-radius: 7px;
+        }
+        transform-rotation: Bird_Faling == true ? 45deg : 0deg;
+    }
+
+    // Count
+    Text {
+        x: 8px;
+        y: 8px;
+        text: root.count;
+        font-size: 16px;
+        font-weight: 700;
+        color: red;
+        horizontal-alignment: start;
+    }
+
+    // Level select menu
+    if LevelSelect == true: Rectangle {
+        width: 240px;
+        height: 200px;
+        background: #707070fe;
+        border-radius: 15px;
+        border-width: 5px;
+        border-color: #575757;
+
+        Rectangle {
+            width: 140px;
+            height: 20px;
+            y: -20px;
+            background: #848484;
+            Text {
+                horizontal-alignment: center;
+                width: parent.width - 8px;
+                height: parent.height;
+                x: 8px;
+                text: "A: V      Long A: >";
+                font-weight: 600;
+                color: black;
+            }
+        }
+
+        for _[level] in 3: Rectangle {
+            width: 200px;
+            height: 50px;
+            y: level * 60px+ 15px;
+            background: root.Level == level ? #555555 : #666666;
+            border-radius: 10px;
+            border-width: 5px;
+            border-color: root.Level == level ?  #111111: #3a3a3a;
+            Text {
+                x: 8px;
+                width: parent.width;
+                height: parent.height;
+                text: "Level " + (level == 0 ? "easy": level == 1 ? "hard" : "ultra");
+                font-size: 33px;
+                font-weight: 700;
+                color: black;
+            }
+        }
+    }
+
+}
+
