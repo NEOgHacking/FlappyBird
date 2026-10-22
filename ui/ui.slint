@@ -14,9 +14,9 @@ export component FlappyBirdUI inherits Window {
     // This is a reactive property that we will set from our app's logic code
     in-out property <int> count: 0;
     in property <[Tube_pos]> Tubes;
-    in property <int> Bird_y: 90;
-    in property <bool> Bird_Faling: false;
-    in property <bool> LevelSelect: true;
+    in property <int> Bird-y: 90;
+    in property <bool> Bird-Faling: false;
+    in property <bool> Level-Select: true;
     in property <int> Level: 0;
     in property <bool> Died: false;
 
@@ -123,7 +123,7 @@ export component FlappyBirdUI inherits Window {
         border-color: black;
         border-radius: 13px;
         x: 40px;
-        y: root.Bird_y * 1px;
+        y: root.Bird-y * 1px;
         
         // Eyeball
         Rectangle {
@@ -180,7 +180,7 @@ export component FlappyBirdUI inherits Window {
             border-color: black;
             border-radius: 7px;
         }
-        transform-rotation: Bird_Faling == true ? 45deg : 0deg;
+        transform-rotation: Bird-Faling == true ? 45deg : 0deg;
     }
 
     // Count
@@ -195,7 +195,7 @@ export component FlappyBirdUI inherits Window {
     }
 
     // Level select menu
-    if LevelSelect == true: Rectangle {
+    if Level-Select == true: Rectangle {
         width: 240px;
         height: 200px;
         background: #707070fe;

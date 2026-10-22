@@ -24,19 +24,19 @@ const START_TICK_INTERVAL: u16 = 100;
 const TICK_SPEEDUP: u16 = 1;
 const SPAWN_X: u16 = 330;
 const SPAWN_INTERVAL: u16 = 10;
-const GRAVITY: u16 = 9.81;
+const GRAVITY: f32 = 9.81;
 const JUMP_SPEED: u16 = 10;
 const DEATH_FLOOR: u16 = 180;
 const POLE_WIDTH: u16 = 46;
 const POLE_GAP: u16 = 80;
 
 // Every app is a struct that has all the resources that it needs inside it
-pub struct FlappyBird {
+pub struct FlappyBirdApp {
     button: ResourceLease<Box<dyn Button<A>>>,
 }
 
 // Every app needs to implement the App trait
-impl App for FlappyBird {
+impl App for FlappyBirdApp {
     // This will be the display name in the app list
     const NAME: &'static str = "Flappy Bird";
 
@@ -66,7 +66,7 @@ impl App for FlappyBird {
         // We need a Box because of Rust's async trait requirements
         Box::pin(async move {
             // We try to create an instance of our exported component
-            let ui = match ButtonLoggerUI::new() {
+            let ui = match FlappyBirdUI::new() {
                 Ok(ui) => ui,
                 Err(_) => {
                     defmt::error!("FlappyBird: failed to create UI");
@@ -74,18 +74,19 @@ impl App for FlappyBird {
                 }
             };
 
+            let mut count = 0u32;
+            let mut bird_y = 100u16;
+            let mut tick_speed = START_TICK_INTERVAL;
+            let mut level_select = 0u16;
+
             // We try to show this component on the screen
             if ui.show().is_err() {
                 defmt::error!("FlappyBird: failed to show UI");
                 return;
             }
 
-            let mut count = 0u32;
-            let mut bird_y = 100u16;
-            let mut tick_speed = START_TICK_INTERVAL;
-            loop {
-
-                
+            let mut level_index = 0usize;
+            'select: loop {
                 // We wait until the button is pressed
                 self.button.resource_mut().wait_for_pressed().await;
 
@@ -96,20 +97,33 @@ impl App for FlappyBird {
                     held_ms += 20;
                 }
 
-                // If the button was held for more than 1000 ms, we exit from the app
+                // If the button was held for more than 1000 ms, we exit from the selection menu
                 if held_ms >= 1_000 {
                     while self.button.resource().is_pressed() {
                         Timer::after_millis(20).await;
                     }
-                    break;
+                    break 'select;
                 }
 
-                // If the press was shorter than 1,000 ms, we add 1 to `count`
-                count += 1;
+                // If the press was shorter than 1,000 ms, we move to the next level difficulty
+                // If we are at the last level, we go back to the beginning
+                if level_index > 1 {
+                    level_index = 0;
+                } else {
+                    level_index += 1;
+                }
+
                 // Slint automatically generates `set_` functions for reactive variables
-                ui.set_count(count as i32);
-                // Log the count to the console
-                defmt::info!("button A pressed (count: {})", count);
+                ui.set_Level(level_index as i32);
+            }
+
+            // Then start the game up
+            // First turn off the level select menu
+            ui.set_Level_Select(false);
+
+            // Then idk
+            'game: loop {
+                
             }
 
             // Hide the UI when the app exits
