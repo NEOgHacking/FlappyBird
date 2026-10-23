@@ -19,6 +19,7 @@ export component FlappyBirdUI inherits Window {
     in property <int> bird-y: 90;
     in property <bool> bird-falling: false;
     in property <bool> level-select: true;
+    in property <bool> level-selected: false;
     in property <int> level: 0;
     in property <bool> has-died: false;
 
@@ -231,7 +232,7 @@ export component FlappyBirdUI inherits Window {
             background: root.level == level ? #555555 : #666666;
             border-radius: 10px;
             border-width: 5px;
-            border-color: root.level == level ?  #111111: #3a3a3a;
+            border-color: root.level-selected && root.level == level ? red: root.level == level ?  #111111: #3a3a3a;
             Text {
                 width: parent.width;
                 height: parent.height;
@@ -253,16 +254,27 @@ export component FlappyBirdUI inherits Window {
         border-radius: 15px;
         border-width: 5px;
         border-color: #fc0202;
+        
+        Text {
+            width: parent.width;
+            height: parent.height;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            text: "YOU DIED";
+            font-size: 50px;
+            font-weight: 700;
+            color: white;
+        }
 
         Text {
             width: parent.width;
-                height: parent.height;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                text: "YOU DIED";
-                font-size: 50px;
-                font-weight: 700;
-                color: white;
+            height: parent.height;
+            horizontal-alignment: center;
+            vertical-alignment: bottom;
+            text: "Long A: Exit";
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
         }
     }
 }

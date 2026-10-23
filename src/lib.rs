@@ -26,22 +26,20 @@ use xpanse_api::{
 slint::include_modules!();
 
 const LEVEL_SPEED_TICKS: [Duration; 3] = [
-    Duration::from_millis(40),
-    Duration::from_millis(30),
-    Duration::from_millis(20),
+    Duration::from_millis(150),
+    Duration::from_millis(100),
+    Duration::from_millis(50),
 ];
-const START_TICK_INTERVAL: u16 = 100;
-const TICK_SPEEDUP: u16 = 1;
 const BIRD_X: i16 = 40;
 const SPAWN_X: i16 = 330;
-const SPAWN_INTERVAL: u32 = 10;
+const SPAWN_INTERVAL: u32 = 30;
 const GRAVITY: i16 = 1;
 const JUMP_SPEED: i16 = 10;
 const DEATH_FLOOR: i16 = 180;
 const PIPE_WIDTH: i16 = 46;
 const PIPE_GAP: i16 = 80;
 const MAX_PIPES: usize = 3;
-const PIPE_SPEED: i16 = 1;
+const PIPE_SPEED: i16 = 5;
 
 // Every app is a struct that has all the resources that it needs inside it
 pub struct FlappyBirdApp {
@@ -89,6 +87,8 @@ impl App for FlappyBirdApp {
 
             let mut game = Game::new();
             let pipe_model = Rc::new(VecModel::from(game.ui_pipes()));
+            ui.set_tubes(ModelRc::from(pipe_model.clone()));
+
             let mut level_select = 0;
 
             // We try to show this component on the screen
@@ -107,10 +107,13 @@ impl App for FlappyBirdApp {
                 while self.button.resource().is_pressed() && held_ms < 1_000 {
                     Timer::after_millis(20).await;
                     held_ms += 20;
+                    if held_ms >= 500 {
+                        ui.set_level_selected(true);
+                    }
                 }
 
                 // If the button was held for more than 1000 ms, we exit from the selection menu
-                if held_ms >= 1_000 {
+                if held_ms >= 500 {
                     while self.button.resource().is_pressed() {
                         Timer::after_millis(20).await;
                     }
@@ -133,62 +136,66 @@ impl App for FlappyBirdApp {
             // First turn off the level select menu
             ui.set_level_select(false);
 
-            let game_over = {
-                let button = self.button.resource_mut();
-                let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select - 1]);
-                let mut button_pressed = button.wait_for_pressed();
-                let mut tick = ticker.next();
-                let mut jumping = false;
+            let button = self.button.resource_mut();
+            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select - 1]);
+            let mut button_pressed = button.wait_for_pressed();
+            let mut tick = ticker.next();
+            let mut jumping = false;
+            let mut count = 0;
 
-                // Then start the game loop
-                'game: loop {
-                    jumping = false;
-                    let jumped = match select(
-                        &mut button_pressed,
-                        &mut tick,
-                    )
-                    .await
-                    {
-                        Either::First(()) => jumping = true,
-                        Either::Second(()) => {
-                            drop(tick);
-                            let died = game.advance();
-                            sync_pipe_model(&pipe_model, &game);
-                            if died {
-                                break 'game;
-                            }
-                            tick = ticker.next();
+            // Then start the game loop
+            'game: loop {
+                jumping = false;
+                let jumped = match select(
+                    &mut button_pressed,
+                    &mut tick,
+                )
+                .await
+                {
+                    Either::First(()) => jumping = true,
+                    Either::Second(()) => {
+                        drop(tick);
+                        let died = game.advance();
+                        sync_pipe_model(&pipe_model, &game);
+                        if died {
+                            break 'game;
                         }
-                    };
-
-                    drop(button_pressed);
-
-                    // If you are jumping tell the game to go up
-                    if jumping {
-                        game.jump();
+                        if game.has_died() {
+                            break 'game;
+                        }
+                        tick = ticker.next();
                     }
-
-                    button_pressed = button.wait_for_pressed();
-                }
+                };
 
                 drop(button_pressed);
-                ui.set_has_died(true);
-                'game_over: loop {
-                    let mut held_ms = 0;
-                    while button.is_pressed() && held_ms < 1_000 {
-                        Timer::after_millis(20).await;
-                        held_ms += 20;
-                    }
 
-                    // If the button was held for more than 1000 ms, we exit from the death screen
-                    if held_ms >= 1_000 {
-                        while button.is_pressed() {
-                            Timer::after_millis(20).await;
-                        }
-                        break 'game_over;
-                    }
+                // If you are jumping tell the game to go up
+                if jumping {
+                    game.jump();
                 }
-            };
+
+                update_ui_bird(&ui, &game);
+
+                button_pressed = button.wait_for_pressed();
+            }
+
+            drop(button_pressed);
+            ui.set_has_died(true);
+            'game_over: loop {
+                let mut held_ms = 0;
+                while button.is_pressed() && held_ms < 1_000 {
+                    Timer::after_millis(20).await;
+                    held_ms += 20;
+                }
+
+                // If the button was held for more than 1000 ms, we exit from the death screen
+                if held_ms >= 500 {
+                    while button.is_pressed() {
+                        Timer::after_millis(20).await;
+                    }
+                    break 'game_over;
+                }
+            }
 
             // Hide the UI when the app exits
             if ui.hide().is_err() {
@@ -218,7 +225,6 @@ struct Game {
     bird_y: i16,
     bird_speed: i16,
     bird_falling: bool,
-    tick_speed: u16,
     tick: u32,
     level_select: u8,
 }
@@ -232,7 +238,6 @@ impl Game {
             bird_y: 100,
             bird_speed: 0,
             bird_falling: false,
-            tick_speed: START_TICK_INTERVAL,
             tick: 0,
             level_select: 0,
         };
@@ -242,7 +247,7 @@ impl Game {
 
     // The logic when you press the bird to go up
     fn jump(&mut self) {
-        self.bird_speed += JUMP_SPEED;
+        self.bird_speed -= JUMP_SPEED;
     }
 
     // Advance the game by 1 in game tick
@@ -251,7 +256,7 @@ impl Game {
 
         // Advance the pipes by the amount specified in pipe_speed
         for pipe in &mut self.pipes {
-            pipe.x -= PIPE_SPEED;
+            pipe.x = PIPE_SPEED;
         }
 
         // Check if there has gone a pipe of screen
@@ -271,16 +276,14 @@ impl Game {
 
         // Check if the bird died from a collision with a pipe
         let mut died = false;
-        let mut index = 0;
-        while index < self.pipes.len() {
+        for pipe in &mut self.pipes {
             // Check if the pipe is in the range of the bird on the x axis
-            if (self.pipes[index].x < BIRD_X + PIPE_WIDTH / 2) && (self.pipes[index].x > BIRD_X - PIPE_WIDTH / 2) {
+            if (pipe.x < BIRD_X + PIPE_WIDTH / 2) && (pipe.x > BIRD_X - PIPE_WIDTH / 2) {
                 // Then check if it is touching one of the pipes
-                if (self.bird_y < self.pipes[index].y + PIPE_GAP / 2) || (self.bird_y > self.pipes[index].y - PIPE_GAP / 2) {
+                if (self.bird_y < pipe.y + PIPE_GAP / 2) || (self.bird_y > pipe.y - PIPE_GAP / 2) {
                     died = true;
                 }
             }
-            index += 1;
         }
 
         // Then check if the bird hit the ground
@@ -302,8 +305,8 @@ impl Game {
     // The function for spawning in new pipes
     fn spawn_pipe(&mut self) {
         let mut rng = SmallRng::seed_from_u64(42);
-        let y: i16 = rng.random_range(50..201);
-        let _ = self.pipes.push(MovingPipe { x: SPAWN_X, y });
+        let spawn_y: i16 = rng.random_range(50..201);
+        let _ = self.pipes.push(MovingPipe { x: SPAWN_X, y: spawn_y });
     }
 
     // Idk yet what this does :skulk:
@@ -312,13 +315,14 @@ impl Game {
             .iter()
             .map(|pipe| GamePipe {
                 x_pos: i32::from(pipe.x),
-                top_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
+                top_y_pos: i32::from(pipe.y) - i32::from(PIPE_GAP) / 2,
                 bot_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
             })
             .collect()
     }
 }
 
+// This function syncs the pipes that are in the backend to the frontend
 fn sync_pipe_model(model: &VecModel<GamePipe>, game: &Game) {
     while model.row_count() > game.pipes.len() {
         
@@ -326,9 +330,9 @@ fn sync_pipe_model(model: &VecModel<GamePipe>, game: &Game) {
     for (index, pipe) in game.pipes.iter().enumerate() {
         let ui_pipe = GamePipe {
             x_pos: i32::from(pipe.x),
-            top_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
+            top_y_pos: i32::from(pipe.y) - i32::from(PIPE_GAP) / 2,
             bot_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
-        };
+        }; 
         if index < model.row_count() {
             model.set_row_data(index, ui_pipe);
         } else {
