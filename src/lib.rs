@@ -16,8 +16,8 @@ use xpanse_api::{
     reexports::{
         defmt,
         embassy_futures::select::{Either, select},
-        embassy_time::{Duration, Ticker, Timer},
-        slint::{self, ComponentHandle, Model, ModelRc, SharedString, VecModel},
+        embassy_time::{Duration, Ticker, Timer, Instant},
+        slint::{self, ComponentHandle, Model, ModelRc, VecModel},
     },
     registry::{Registry, ResourceLease},
 };
@@ -35,11 +35,13 @@ const SPAWN_X: i16 = 330;
 const SPAWN_INTERVAL: u32 = 35;
 const GRAVITY: i16 = 1;
 const JUMP_SPEED: i16 = 6;
+const FLAP_TICKS: u32 = 3;
 const DEATH_FLOOR: i16 = 180;
 const PIPE_WIDTH: i16 = 46;
 const PIPE_GAP: i16 = 80;
 const MAX_PIPES: usize = 4;
 const PIPE_SPEED: i16 = 5;
+const MENU_FLAP_TICKS: Duration = Duration::from_millis(200);
 
 // Every app is a struct that has all the resources that it needs inside it
 pub struct FlappyBirdApp {
@@ -89,7 +91,6 @@ impl App for FlappyBirdApp {
             let pipe_model = Rc::new(VecModel::from(game.ui_pipes()));
             ui.set_tubes(ModelRc::from(pipe_model.clone()));
 
-            let mut level_select = 0;
 
             // We try to show this component on the screen
             if ui.show().is_err() {
@@ -97,51 +98,79 @@ impl App for FlappyBirdApp {
                 return;
             }
 
+
+            let button = self.button.resource_mut();
+            let mut ticker_flap = Ticker::every(MENU_FLAP_TICKS);
+            let mut tick_flap = ticker_flap.next();
+
             // The loop that is the selection menu
             'select: loop {
-                // We wait until the button is pressed
-                self.button.resource_mut().wait_for_pressed().await;
-
-                // We count how many milliseconds the button was held
-                let mut held_ms = 0;
-                while self.button.resource().is_pressed() && held_ms < 1_000 {
-                    Timer::after_millis(20).await;
-                    held_ms += 20;
-                    if held_ms >= 500 {
-                        ui.set_level_selected(true);
+                let mut button_pressed_menu = button.wait_for_pressed();
+                let _select = match select(
+                    &mut button_pressed_menu,
+                    &mut tick_flap,
+                )
+                .await
+                {
+                    Either::First(()) => {
+                        // We count how many milliseconds the button was held
+                        drop(button_pressed_menu);
+                        let mut held_ms = 0;
+                        while button.is_pressed() && held_ms < 500 {
+                            Timer::after_millis(20).await;
+                            held_ms += 20;
+                            if held_ms >= 500 {
+                                ui.set_selected(true);
+                            }
+                        }
+                    
+                        // If the button was held for more than 1000 ms, we exit from the selection menu
+                        if held_ms >= 500 {
+                            while button.is_pressed() {
+                                Timer::after_millis(20).await;
+                            }
+                            if game.level_select == 3 {
+                                game.low_grapics = !game.low_grapics;
+                                ui.set_low_grapics(game.low_grapics);
+                                ui.set_selected(false);
+                            } else {
+                                break 'select;
+                            }
+                        } else {
+                            // If the press was shorter than 1,000 ms, we move to the next level difficulty
+                            // If we are at the last level, we go back to the beginning
+                            if game.level_select > 2 {
+                                game.level_select = 0;
+                            } else {
+                                game.level_select += 1;
+                            }
+                        }
+                    },
+                    Either::Second(()) => {
+                        drop(tick_flap);
+                        drop(button_pressed_menu);
+                        game.bird_flap = !game.bird_flap;
+                        tick_flap = ticker_flap.next();
                     }
-                }
+                };
 
-                // If the button was held for more than 1000 ms, we exit from the selection menu
-                if held_ms >= 500 {
-                    while self.button.resource().is_pressed() {
-                        Timer::after_millis(20).await;
-                    }
-                    break 'select;
-                }
-
-                // If the press was shorter than 1,000 ms, we move to the next level difficulty
-                // If we are at the last level, we go back to the beginning
-                if level_select > 1 {
-                    level_select = 0;
-                } else {
-                    level_select += 1;
-                }
-
-                // Slint automatically generates `set_` functions for reactive variables
-                ui.set_level(level_select as i32);
+                // Then update the ui aka the frontend
+                update_ui_bird(&ui, &game);
+                ui.set_level(game.level_select as i32);
+                
+                // Finally retake the button to wait for a press
+                button_pressed_menu = button.wait_for_pressed();
             }
 
             // Then start the game up
             // First turn off the level select menu
             ui.set_level_select(false);
 
-            let button = self.button.resource_mut();
-            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select]);
             let mut button_pressed = button.wait_for_pressed();
-            let mut tick = ticker.next();
-            let mut jumping = false;
+            let mut jumping: bool;
             let mut been_killed = false;
+            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[game.level_select]);
+            let mut tick = ticker.next();
 
             // Then start the game loop
             'game: loop {
@@ -174,20 +203,23 @@ impl App for FlappyBirdApp {
                 update_ui_bird(&ui, &game);
                 update_ui_info(&ui, &game);
 
-                button_pressed = button.wait_for_pressed();
-
                 if been_killed {
                     break 'game;
                 }
+
+                button_pressed = button.wait_for_pressed();
             }
 
-            drop(button_pressed);
-            ui.set_has_died(true);
             'game_over: loop {
+                ui.set_selected(false);
+                ui.set_has_died(true);
                 let mut held_ms = 0;
                 while button.is_pressed() && held_ms < 1_000 {
                     Timer::after_millis(20).await;
                     held_ms += 20;
+                    if held_ms >= 500 {
+                        ui.set_selected(true);
+                    }
                 }
 
                 // If the button was held for more than 1000 ms, we exit from the death screen
@@ -224,11 +256,14 @@ struct MovingPipe {
 struct Game {
     pipes: FixedVec<MovingPipe, MAX_PIPES>,
     count: u32,
+    level_select: usize,
     bird_y: i16,
     bird_speed: i16,
     bird_falling: bool,
+    bird_flap_tick: u32,
+    bird_flap: bool,
     tick: u32,
-    level_select: u8,
+    low_grapics: bool,
     rng: SmallRng,
 }
 
@@ -238,12 +273,15 @@ impl Game {
         let mut game = Self {
             pipes: FixedVec::new(),
             count: 0,
+            level_select: 0,
             bird_y: 100,
             bird_speed: 0,
+            bird_flap_tick: 0,
+            bird_flap: false,
             bird_falling: false,
             tick: 0,
-            level_select: 0,
-            rng: SmallRng::seed_from_u64(42),
+            low_grapics: false,
+            rng: SmallRng::seed_from_u64(Instant::now().as_micros()),
         }; 
 
         game.spawn_pipe();
@@ -253,11 +291,18 @@ impl Game {
     // The logic when you press the bird to go up
     fn jump(&mut self) {
         self.bird_speed = -JUMP_SPEED;
+        self.bird_flap_tick = FLAP_TICKS;
     }
 
     // Advance the game by 1 in game tick
     fn advance(&mut self) -> bool{
         self.tick = self.tick.wrapping_add(1);
+        if self.bird_flap_tick > 0 {
+            self.bird_flap_tick -= 1;
+            self.bird_flap = !self.bird_flap;
+        } else {
+            self.bird_flap = false;
+        }
 
         // Advance the pipes by the amount specified in pipe_speed
         for pipe in &mut self.pipes {
@@ -266,7 +311,7 @@ impl Game {
 
         // Update the birds posistion
         self.bird_speed += GRAVITY;
-        self.bird_y += self.bird_speed;
+        self.bird_y = (self.bird_y + self.bird_speed).max(0);
         self.bird_falling = self.bird_speed > 0;
 
         // Check if the bird died from a collision with a pipe
@@ -360,4 +405,5 @@ fn update_ui_info(ui: &FlappyBirdUI, game: &Game) {
 fn update_ui_bird(ui: &FlappyBirdUI, game: &Game) {
     ui.set_bird_y(i32::from(game.bird_y));
     ui.set_bird_falling(game.bird_falling);
+    ui.set_bird_flapping(game.bird_flap);
 }
