@@ -276,6 +276,18 @@ export component FlappyBirdUI inherits Window {
             font-weight: 700;
             color: white;
         }
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            y: 5px;
+            horizontal-alignment: center;
+            vertical-alignment: top;
+            text: "Score " + root.count;
+            font-size: 30px;
+            font-weight: 700;
+            color: white;
+        }
     }
 }
 

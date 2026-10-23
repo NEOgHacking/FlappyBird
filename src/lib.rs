@@ -26,19 +26,19 @@ use xpanse_api::{
 slint::include_modules!();
 
 const LEVEL_SPEED_TICKS: [Duration; 3] = [
-    Duration::from_millis(150),
     Duration::from_millis(100),
     Duration::from_millis(50),
+    Duration::from_millis(30),
 ];
 const BIRD_X: i16 = 40;
 const SPAWN_X: i16 = 330;
-const SPAWN_INTERVAL: u32 = 30;
+const SPAWN_INTERVAL: u32 = 35;
 const GRAVITY: i16 = 1;
-const JUMP_SPEED: i16 = 10;
+const JUMP_SPEED: i16 = 6;
 const DEATH_FLOOR: i16 = 180;
 const PIPE_WIDTH: i16 = 46;
 const PIPE_GAP: i16 = 80;
-const MAX_PIPES: usize = 3;
+const MAX_PIPES: usize = 4;
 const PIPE_SPEED: i16 = 5;
 
 // Every app is a struct that has all the resources that it needs inside it
@@ -141,12 +141,11 @@ impl App for FlappyBirdApp {
             let mut button_pressed = button.wait_for_pressed();
             let mut tick = ticker.next();
             let mut jumping = false;
-            let mut count = 0;
             let mut been_killed = false;
 
             // Then start the game loop
             'game: loop {
-                let jumped = match select(
+                let _jumped = match select(
                     &mut button_pressed,
                     &mut tick,
                 )
@@ -173,6 +172,7 @@ impl App for FlappyBirdApp {
                 }
 
                 update_ui_bird(&ui, &game);
+                update_ui_info(&ui, &game);
 
                 button_pressed = button.wait_for_pressed();
 
@@ -229,6 +229,7 @@ struct Game {
     bird_falling: bool,
     tick: u32,
     level_select: u8,
+    rng: SmallRng,
 }
 
 impl Game {
@@ -242,7 +243,9 @@ impl Game {
             bird_falling: false,
             tick: 0,
             level_select: 0,
-        };
+            rng: SmallRng::seed_from_u64(42),
+        }; 
+
         game.spawn_pipe();
         game
     }
@@ -261,16 +264,6 @@ impl Game {
             pipe.x -= PIPE_SPEED;
         }
 
-        // Check if there has gone a pipe of screen
-        let mut index = 0;
-        while index < self.pipes.len() {
-            if self.pipes[index].x < -20 {
-                self.pipes.remove(index);
-            } else {
-                index += 1;
-            }
-        }
-
         // Update the birds posistion
         self.bird_speed += GRAVITY;
         self.bird_y += self.bird_speed;
@@ -285,6 +278,17 @@ impl Game {
                 if (self.bird_y > pipe.y + (PIPE_GAP / 2)) || (self.bird_y < (pipe.y - PIPE_GAP / 2)) {
                     died = true;
                 }
+            }
+        }
+
+        // Check if there has gone a pipe of screen
+        let mut index = 0;
+        while index < self.pipes.len() {
+            if self.pipes[index].x < -40 {
+                self.pipes.remove(index);
+                self.add_point();
+            } else {
+                index += 1;
             }
         }
 
@@ -306,9 +310,13 @@ impl Game {
 
     // The function for spawning in new pipes
     fn spawn_pipe(&mut self) {
-        let mut rng = SmallRng::seed_from_u64(42);
-        let spawn_y: i16 = rng.random_range(50..201);
+        let spawn_y: i16 = self.rng.random_range(20..181);
         let _ = self.pipes.push(MovingPipe { x: SPAWN_X, y: spawn_y });
+    }
+
+    // A function for adding a point when a pipe goes away
+    fn add_point(&mut self) {
+        self.count += 1;
     }
 
     // Idk yet what this does :skulk:
@@ -327,7 +335,7 @@ impl Game {
 // This function syncs the pipes that are in the backend to the frontend
 fn sync_pipe_model(model: &VecModel<GamePipe>, game: &Game) {
     while model.row_count() > game.pipes.len() {
-        
+        model.remove(model.row_count() - 1);
     };
     for (index, pipe) in game.pipes.iter().enumerate() {
         let ui_pipe = GamePipe {
