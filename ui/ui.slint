@@ -1,7 +1,7 @@
 import "../fonts/ShareTechMono-Regular.ttf";
 import { VerticalBox } from "std-widgets.slint";
 
-export struct tube_pos {
+export struct GamePipe {
     top_y_pos: int,
     bot_y_pos: int,
     x_pos: int,    
@@ -14,12 +14,13 @@ export component FlappyBirdUI inherits Window {
 
     // This is a reactive property that we will set from our app's logic code
     in-out property <int> count: 0;
-    in property <[tube_pos]> tubes;
+    in property <[GamePipe]> tubes;
+    in property <int> bird-x: 40;
     in property <int> bird-y: 90;
     in property <bool> bird-falling: false;
     in property <bool> level-select: true;
     in property <int> level: 0;
-    in property <bool> died: false;
+    in property <bool> has-died: false;
 
     default-font-family: "Share Tech Mono";
 
@@ -72,7 +73,6 @@ export component FlappyBirdUI inherits Window {
     }
 
     // Tubes
-
     for tube in root.tubes: Rectangle{
             Rectangle {
             width: 36px;
@@ -125,7 +125,7 @@ export component FlappyBirdUI inherits Window {
         border-width: 3px;
         border-color: black;
         border-radius: 13px;
-        x: 40px;
+        x: root.bird_x * 1px;
         y: root.bird-y * 1px;
         
         // Eyeball
@@ -245,5 +245,25 @@ export component FlappyBirdUI inherits Window {
         }
     }
 
+    // Death screen
+    if root.has-died: Rectangle{
+        width: 240px;
+        height: 140px;
+        background: #ff3232d9;
+        border-radius: 15px;
+        border-width: 5px;
+        border-color: #fc0202;
+
+        Text {
+            width: parent.width;
+                height: parent.height;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                text: "YOU DIED";
+                font-size: 50px;
+                font-weight: 700;
+                color: white;
+        }
+    }
 }
 

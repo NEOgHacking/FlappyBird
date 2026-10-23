@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+heapless = "0.9"
+rand = { version = "0.10", default-features = false }   
 slint = { version = "1.17", default-features = false, features = [
   "compat-1-2",
   "unsafe-single-threaded",
