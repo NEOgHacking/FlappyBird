@@ -137,15 +137,15 @@ impl App for FlappyBirdApp {
             ui.set_level_select(false);
 
             let button = self.button.resource_mut();
-            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select - 1]);
+            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select]);
             let mut button_pressed = button.wait_for_pressed();
             let mut tick = ticker.next();
             let mut jumping = false;
             let mut count = 0;
+            let mut been_killed = false;
 
             // Then start the game loop
             'game: loop {
-                jumping = false;
                 let jumped = match select(
                     &mut button_pressed,
                     &mut tick,
@@ -155,15 +155,13 @@ impl App for FlappyBirdApp {
                     Either::First(()) => jumping = true,
                     Either::Second(()) => {
                         drop(tick);
-                        let died = game.advance();
+                        been_killed = game.advance();
                         sync_pipe_model(&pipe_model, &game);
-                        if died {
-                            break 'game;
-                        }
                         if game.has_died() {
-                            break 'game;
+                            been_killed = true;
                         }
                         tick = ticker.next();
+                        jumping = false;
                     }
                 };
 
@@ -177,6 +175,10 @@ impl App for FlappyBirdApp {
                 update_ui_bird(&ui, &game);
 
                 button_pressed = button.wait_for_pressed();
+
+                if been_killed {
+                    break 'game;
+                }
             }
 
             drop(button_pressed);
@@ -247,7 +249,7 @@ impl Game {
 
     // The logic when you press the bird to go up
     fn jump(&mut self) {
-        self.bird_speed -= JUMP_SPEED;
+        self.bird_speed = -JUMP_SPEED;
     }
 
     // Advance the game by 1 in game tick
@@ -256,7 +258,7 @@ impl Game {
 
         // Advance the pipes by the amount specified in pipe_speed
         for pipe in &mut self.pipes {
-            pipe.x = PIPE_SPEED;
+            pipe.x -= PIPE_SPEED;
         }
 
         // Check if there has gone a pipe of screen
@@ -280,7 +282,7 @@ impl Game {
             // Check if the pipe is in the range of the bird on the x axis
             if (pipe.x < BIRD_X + PIPE_WIDTH / 2) && (pipe.x > BIRD_X - PIPE_WIDTH / 2) {
                 // Then check if it is touching one of the pipes
-                if (self.bird_y < pipe.y + PIPE_GAP / 2) || (self.bird_y > pipe.y - PIPE_GAP / 2) {
+                if (self.bird_y > pipe.y + (PIPE_GAP / 2)) || (self.bird_y < (pipe.y - PIPE_GAP / 2)) {
                     died = true;
                 }
             }
@@ -346,6 +348,7 @@ fn update_ui_info(ui: &FlappyBirdUI, game: &Game) {
     ui.set_count(game.count.min(i32::MAX as u32) as i32);
 }
 
+// Update the bird place and orientation
 fn update_ui_bird(ui: &FlappyBirdUI, game: &Game) {
     ui.set_bird_y(i32::from(game.bird_y));
     ui.set_bird_falling(game.bird_falling);
