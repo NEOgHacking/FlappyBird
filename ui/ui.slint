@@ -1,6 +1,7 @@
+import "../fonts/ShareTechMono-Regular.ttf";
 import { VerticalBox } from "std-widgets.slint";
 
-export struct Tube_pos {
+export struct tube_pos {
     top_y_pos: int,
     bot_y_pos: int,
     x_pos: int,    
@@ -13,12 +14,14 @@ export component FlappyBirdUI inherits Window {
 
     // This is a reactive property that we will set from our app's logic code
     in-out property <int> count: 0;
-    in property <[Tube_pos]> Tubes;
-    in property <int> Bird-y: 90;
-    in property <bool> Bird-Faling: false;
-    in property <bool> Level-Select: true;
-    in property <int> Level: 0;
-    in property <bool> Died: false;
+    in property <[tube_pos]> tubes;
+    in property <int> bird-y: 90;
+    in property <bool> bird-falling: false;
+    in property <bool> level-select: true;
+    in property <int> level: 0;
+    in property <bool> died: false;
+
+    default-font-family: "Share Tech Mono";
 
     // The background
     VerticalLayout {
@@ -70,12 +73,12 @@ export component FlappyBirdUI inherits Window {
 
     // Tubes
 
-    for Tube in root.Tubes: Rectangle{
+    for tube in root.tubes: Rectangle{
             Rectangle {
             width: 36px;
             height: 240px;
-            x: Tube.x-pos * 1px;
-            y: Tube.bot-y-pos * 1px + 19px + 30px;
+            x: tube.x-pos * 1px;
+            y: tube.bot-y-pos * 1px + 19px + 30px;
             background: #55ff00;
             border-width: 3px;
             border-color: black;
@@ -84,8 +87,8 @@ export component FlappyBirdUI inherits Window {
         Rectangle {
             width: 36px;
             height: 240px;
-            x: Tube.x-pos * 1px;
-            y: Tube.top-y-pos * 1px - 20px - 240px;
+            x: tube.x-pos * 1px;
+            y: tube.top-y-pos * 1px - 20px - 240px;
             background: #55ff00;
             border-width: 3px;
             border-color: black;
@@ -94,8 +97,8 @@ export component FlappyBirdUI inherits Window {
         Rectangle {
             width: 46px;
             height: 22px;
-            x: Tube.x-pos * 1px - 5px;
-            y: Tube.bot-y-pos * 1px + 30px;
+            x: tube.x-pos * 1px - 5px;
+            y: tube.bot-y-pos * 1px + 30px;
             background: #55ff00;
             border-width: 3px;
             border-color: black;
@@ -105,8 +108,8 @@ export component FlappyBirdUI inherits Window {
         Rectangle {
             width: 46px;
             height: 22px;
-            x: Tube.x-pos * 1px - 5px;
-            y: Tube.top-y-pos * 1px - 22px;
+            x: tube.x-pos * 1px - 5px;
+            y: tube.top-y-pos * 1px - 22px;
             background: #55ff00;
             border-width: 3px;
             border-color: black;
@@ -123,7 +126,7 @@ export component FlappyBirdUI inherits Window {
         border-color: black;
         border-radius: 13px;
         x: 40px;
-        y: root.Bird-y * 1px;
+        y: root.bird-y * 1px;
         
         // Eyeball
         Rectangle {
@@ -180,7 +183,7 @@ export component FlappyBirdUI inherits Window {
             border-color: black;
             border-radius: 7px;
         }
-        transform-rotation: Bird-Faling == true ? 45deg : 0deg;
+        transform-rotation: root.bird-falling == true ? 45deg : 0deg;
     }
 
     // Count
@@ -195,7 +198,7 @@ export component FlappyBirdUI inherits Window {
     }
 
     // Level select menu
-    if Level-Select == true: Rectangle {
+    if root.level-select: Rectangle {
         width: 240px;
         height: 200px;
         background: #707070fe;
@@ -208,13 +211,15 @@ export component FlappyBirdUI inherits Window {
             height: 20px;
             y: -20px;
             background: #848484;
+            border-radius: 5px;
             Text {
-                horizontal-alignment: center;
-                width: parent.width - 8px;
+                width: parent.width - 4px;
                 height: parent.height;
-                x: 8px;
-                text: "A: V      Long A: >";
-                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                text: "A: V   Long A: >";
+                font-size: 14px;
+                font-weight: 700;
                 color: black;
             }
         }
@@ -223,16 +228,17 @@ export component FlappyBirdUI inherits Window {
             width: 200px;
             height: 50px;
             y: level * 60px+ 15px;
-            background: root.Level == level ? #555555 : #666666;
+            background: root.level == level ? #555555 : #666666;
             border-radius: 10px;
             border-width: 5px;
-            border-color: root.Level == level ?  #111111: #3a3a3a;
+            border-color: root.level == level ?  #111111: #3a3a3a;
             Text {
-                x: 8px;
                 width: parent.width;
                 height: parent.height;
+                horizontal-alignment: center;
+                vertical-alignment: center;
                 text: "Level " + (level == 0 ? "easy": level == 1 ? "hard" : "ultra");
-                font-size: 33px;
+                font-size: 30px;
                 font-weight: 700;
                 color: black;
             }

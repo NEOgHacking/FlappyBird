@@ -3,9 +3,11 @@
 // We use Box and other types that require the heap, so we have to include this
 extern crate alloc;
 
+use rand::Rng;
 use alloc::boxed::Box;
 use core::{future::Future, pin::Pin};
 
+use heapless::Vec as FixedVec;
 use xpanse_api::{
     app::App,
     interfaces::buttons::{A, Button},
@@ -22,13 +24,14 @@ slint::include_modules!();
 
 const START_TICK_INTERVAL: u16 = 100;
 const TICK_SPEEDUP: u16 = 1;
-const SPAWN_X: u16 = 330;
+const SPAWN_X: u8 = 330;
 const SPAWN_INTERVAL: u16 = 10;
 const GRAVITY: f32 = 9.81;
-const JUMP_SPEED: u16 = 10;
-const DEATH_FLOOR: u16 = 180;
-const POLE_WIDTH: u16 = 46;
-const POLE_GAP: u16 = 80;
+const JUMP_SPEED: f32 = 10;
+const DEATH_FLOOR: u8 = 180;
+const PIPE_WIDTH: u8 = 46;
+const PIPE_GAP: u8 = 80;
+const MAX_PIPES: u8 = 3;
 
 // Every app is a struct that has all the resources that it needs inside it
 pub struct FlappyBirdApp {
@@ -74,10 +77,8 @@ impl App for FlappyBirdApp {
                 }
             };
 
-            let mut count = 0u32;
-            let mut bird_y = 100u16;
-            let mut tick_speed = START_TICK_INTERVAL;
-            let mut level_select = 0u16;
+            let mut game = Game::new();
+            let pipe_model = Rc::new(VecModel::from(game.ui_pipes()));
 
             // We try to show this component on the screen
             if ui.show().is_err() {
@@ -85,7 +86,7 @@ impl App for FlappyBirdApp {
                 return;
             }
 
-            let mut level_index = 0usize;
+            // The loop that is the selection menu
             'select: loop {
                 // We wait until the button is pressed
                 self.button.resource_mut().wait_for_pressed().await;
@@ -107,22 +108,23 @@ impl App for FlappyBirdApp {
 
                 // If the press was shorter than 1,000 ms, we move to the next level difficulty
                 // If we are at the last level, we go back to the beginning
-                if level_index > 1 {
-                    level_index = 0;
+                if Self.level_select > 1 {
+                    Self.level_select = 0;
                 } else {
-                    level_index += 1;
+                    Self.level_select += 1;
                 }
 
                 // Slint automatically generates `set_` functions for reactive variables
-                ui.set_Level(level_index as i32);
+                ui.set_level(Self.level_select as i32);
             }
 
             // Then start the game up
             // First turn off the level select menu
-            ui.set_Level_Select(false);
+            ui.set_level_select(false);
 
             // Then idk
             'game: loop {
+                self.button.resource_mut().wait_for_pressed().await;
                 
             }
 
@@ -138,4 +140,76 @@ impl App for FlappyBirdApp {
     fn release(self, registry: &mut Registry) {
         registry.return_resource(self.button);
     }
+}
+
+// The struct where the pipes that come to you are stored
+struct FallingPipe {
+    x: u8,
+    y: u8,
+}
+
+// All the vallues from the game
+struct Game {
+    pipes: FixedVecL<FallingPipe, MAX_PIPES>
+    count: u32,
+    bird_y: u16,
+    bird_falling: bool,
+    tick_speed: u16,
+    tick: u32,
+    level_select: u8,
+}
+
+impl Game {
+    fn new() -> Self {
+        let mut game = Self {
+            pipes: FixedVec::new(),
+            count: 0,
+            bird_y: 100,
+            bird_falling: false,
+            tick_speed: START_TICK_INTERVAL,
+            tick: 0,
+            level_select: 0,
+        };
+        game.spawn_tube();
+        game
+    }
+
+    // The function for spawning in new notes
+    fn spawn_tube(&mut self) {
+        let y: u8 = rng.genrange(50..201);
+        let _ = self.pipes.push(FallingPipe { x: SPAWN_X, y });
+    }
+
+    // Idk yet what this does :skulk:
+    fn ui_pipes(&self) -> Vec<GamePipe> {
+        self.pipes
+            .iter()
+            .map(|pipe| GamePipe {
+                x: i32::from(pipe.x),
+                y: i32::from(pipe.y),
+            })
+            .collect()
+    }
+}
+
+fn sync_pipe_model(model: &VecModel<GamePipe>, game: &Game) {
+    while model.row_count() > game.pipes.len() {
+        
+    };
+    for (index, pipe) in game.pipes.iter().enumerate() {
+        let ui_pipe = GamePipe {
+            x: i32::from(note.x),
+            y: i32::from(note.y),
+        };
+        if index < model.row_count() {
+            model.set_row_data(index, ui_pipe);
+        } else {
+            model.push(ui_pipe);
+        }
+    }
+}
+
+// Update the games ui info from the backend
+fn update_ui_info(ui: &FlappyBirdUI, game: &Game) {
+    ui.set_count(i32::from(game.count));
 }
