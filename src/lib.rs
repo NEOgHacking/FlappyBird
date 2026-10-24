@@ -41,7 +41,9 @@ const PIPE_WIDTH: i16 = 46;
 const PIPE_GAP: i16 = 80;
 const MAX_PIPES: usize = 4;
 const PIPE_SPEED: i16 = 5;
-const MENU_FLAP_TICKS: Duration = Duration::from_millis(200);
+const MENU_TICKS: u64 = 20;
+const MENU_FLAP_TICKS: usize = 10;
+const LONG_PRESS_TIME: usize = 300;
 
 // Every app is a struct that has all the resources that it needs inside it
 pub struct FlappyBirdApp {
@@ -87,6 +89,8 @@ impl App for FlappyBirdApp {
                 }
             };
 
+            let mut level_select: usize;
+            let mut selection: usize = 0;
             let mut game = Game::new();
             let pipe_model = Rc::new(VecModel::from(game.ui_pipes()));
             ui.set_tubes(ModelRc::from(pipe_model.clone()));
@@ -100,134 +104,165 @@ impl App for FlappyBirdApp {
 
 
             let button = self.button.resource_mut();
-            let mut ticker_flap = Ticker::every(MENU_FLAP_TICKS);
-            let mut tick_flap = ticker_flap.next();
+            let mut ticker_menu = Ticker::every(Duration::from_millis(MENU_TICKS));
+            let mut tick_menu = ticker_menu.next();
+            let mut tick_flap = 0;
+            let mut held_ms = 0;
 
             // The loop that is the selection menu
             'select: loop {
-                let mut button_pressed_menu = button.wait_for_pressed();
-                let _select = match select(
-                    &mut button_pressed_menu,
-                    &mut tick_flap,
-                )
-                .await
-                {
-                    Either::First(()) => {
-                        // We count how many milliseconds the button was held
-                        drop(button_pressed_menu);
-                        let mut held_ms = 0;
-                        while button.is_pressed() && held_ms < 500 {
-                            Timer::after_millis(20).await;
-                            held_ms += 20;
-                            if held_ms >= 500 {
-                                ui.set_selected(true);
-                            }
-                        }
-                    
-                        // If the button was held for more than 1000 ms, we exit from the selection menu
-                        if held_ms >= 500 {
-                            while button.is_pressed() {
-                                Timer::after_millis(20).await;
-                            }
-                            if game.level_select == 3 {
+                tick_menu.await;
+
+                if button.is_pressed() {
+                    held_ms += MENU_TICKS;
+                    if held_ms >= LONG_PRESS_TIME as u64 {
+                        ui.set_selected(true);
+                    }
+                } else {
+                    if held_ms > 0 {
+                        // If the button was held for more than LONG_PRESS_TIME ms, we exit from the selection menu
+                        if held_ms >= LONG_PRESS_TIME as u64 {
+                            if selection == 3 {
                                 game.low_grapics = !game.low_grapics;
                                 ui.set_low_grapics(game.low_grapics);
                                 ui.set_selected(false);
                             } else {
+                                level_select = selection;
                                 break 'select;
                             }
                         } else {
-                            // If the press was shorter than 1,000 ms, we move to the next level difficulty
+                            // If the press was shorter than LONG_PRESS_TIME ms, we move to the next level difficulty
                             // If we are at the last level, we go back to the beginning
-                            if game.level_select > 2 {
-                                game.level_select = 0;
+                            if selection > 2 {
+                                selection = 0;
                             } else {
-                                game.level_select += 1;
+                                selection += 1;
                             }
                         }
-                    },
-                    Either::Second(()) => {
-                        drop(tick_flap);
-                        drop(button_pressed_menu);
-                        game.bird_flap = !game.bird_flap;
-                        tick_flap = ticker_flap.next();
+                        held_ms = 0;
                     }
-                };
+                }
 
-                // Then update the ui aka the frontend
-                update_ui_bird(&ui, &game);
-                ui.set_level(game.level_select as i32);
+                tick_menu = ticker_menu.next();
+                tick_flap += 1;
+
+                // Check if it is time to flap birds wings
+                if tick_flap % MENU_FLAP_TICKS == 0 {
+                    game.bird_flap = !game.bird_flap;
+                }
                 
+                // Then update the ui aka the frontend
+                ui.set_selection(selection as i32);
+                ui.set_bird_flapping(game.bird_flap);
                 // Finally retake the button to wait for a press
-                button_pressed_menu = button.wait_for_pressed();
             }
 
-            // Then start the game up
-            // First turn off the level select menu
-            ui.set_level_select(false);
+            // The main loop that cycles the game
+            'run: loop {
 
-            let mut button_pressed = button.wait_for_pressed();
-            let mut jumping: bool;
-            let mut been_killed = false;
-            let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[game.level_select]);
-            let mut tick = ticker.next();
+                // Then start the game up
+                // First turn off the level select menu
+                ui.set_level_select(false);
+                ui.set_has_died(false);
 
-            // Then start the game loop
-            'game: loop {
-                let _jumped = match select(
-                    &mut button_pressed,
-                    &mut tick,
-                )
-                .await
-                {
-                    Either::First(()) => jumping = true,
-                    Either::Second(()) => {
-                        drop(tick);
-                        been_killed = game.advance();
-                        sync_pipe_model(&pipe_model, &game);
-                        if game.has_died() {
-                            been_killed = true;
+                game = Game::new();
+
+                let mut button_pressed = button.wait_for_pressed();
+                let mut been_killed = false;
+                let mut ticker = Ticker::every(LEVEL_SPEED_TICKS[level_select]);
+                let mut tick = ticker.next();
+
+                // Then start the game loop
+                'game: loop {
+                    let _jumped = match select(
+                        &mut button_pressed,
+                        &mut tick,
+                    )
+                    .await
+                    {
+                        Either::First(()) => {
+                            game.jump();
+                            button_pressed = button.wait_for_pressed();
                         }
-                        tick = ticker.next();
-                        jumping = false;
+                        Either::Second(()) => {
+                            drop(tick);
+                            been_killed = game.advance();
+                            sync_pipe_model(&pipe_model, &game);
+                            if game.has_died() {
+                                been_killed = true;
+                            }
+                            tick = ticker.next();
+                        }
+                    };
+
+                    update_ui_bird(&ui, &game);
+                    update_ui_info(&ui, &game);
+
+                    if been_killed {
+                        break 'game;
                     }
-                };
-
-                drop(button_pressed);
-
-                // If you are jumping tell the game to go up
-                if jumping {
-                    game.jump();
                 }
 
-                update_ui_bird(&ui, &game);
-                update_ui_info(&ui, &game);
-
-                if been_killed {
-                    break 'game;
-                }
-
-                button_pressed = button.wait_for_pressed();
-            }
-
-            'game_over: loop {
                 ui.set_selected(false);
                 ui.set_has_died(true);
-                let mut held_ms = 0;
-                while button.is_pressed() && held_ms < 1_000 {
-                    Timer::after_millis(20).await;
-                    held_ms += 20;
-                    if held_ms >= 500 {
-                        ui.set_selected(true);
-                    }
-                }
+                ui.set_selection(selection as i32);
+                drop(tick);
+                tick = ticker.next();
+                let mut button_pressed = button.wait_for_pressed();
+                selection = 0;
 
-                // If the button was held for more than 1000 ms, we exit from the death screen
-                if held_ms >= 500 {
-                    while button.is_pressed() {
-                        Timer::after_millis(20).await;
-                    }
-                    break 'game_over;
+                'game_over: loop {
+                    let _select = match select(
+                        &mut button_pressed,
+                        &mut tick,
+                    )
+                    .await
+                    {
+                        Either::First(()) => {
+                            // We count how many milliseconds the button was held
+                            drop(button_pressed);
+                            let mut held_ms = 0;
+                            while button.is_pressed() && held_ms < LONG_PRESS_TIME {
+                                Timer::after_millis(20).await;
+                                held_ms += 20;
+                            }
+                        
+                            // If the button was held for more than 1000 ms, we exit from the selection menu
+                            if held_ms >= LONG_PRESS_TIME {
+                                ui.set_selected(true);
+
+                                while button.is_pressed() {
+                                    Timer::after_millis(20).await;
+                                }
+                                if selection == 0 {
+                                    break 'game_over;
+                                } else {
+                                    break 'run;
+                                }
+
+                            } else {
+                                // If the press was shorter than LONG_PRESS_TIME ms, we move to the next selection
+                                // If we are at the last selection, we go back to the beginning
+                                if selection > 0 {
+                                    selection = 0;
+                                } else {
+                                    selection += 1;
+                                }
+                            }
+                        },
+                        Either::Second(()) => {
+                            drop(tick);
+                            drop(button_pressed);
+                            tick = ticker.next();
+                        }
+                    };
+
+                    // Then update the ui aka the frontend
+                    update_ui_bird(&ui, &game);
+                    ui.set_selection(selection as i32);
+
+                    // Finally retake the button to wait for a press
+                    button_pressed = button.wait_for_pressed();
                 }
             }
 
@@ -256,7 +291,6 @@ struct MovingPipe {
 struct Game {
     pipes: FixedVec<MovingPipe, MAX_PIPES>,
     count: u32,
-    level_select: usize,
     bird_y: i16,
     bird_speed: i16,
     bird_falling: bool,
@@ -273,7 +307,6 @@ impl Game {
         let mut game = Self {
             pipes: FixedVec::new(),
             count: 0,
-            level_select: 0,
             bird_y: 100,
             bird_speed: 0,
             bird_flap_tick: 0,
