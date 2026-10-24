@@ -39,6 +39,7 @@ const FLAP_TICKS: u32 = 3;
 const DEATH_FLOOR: i16 = 180;
 const PIPE_WIDTH: i16 = 46;
 const PIPE_GAP: i16 = 80;
+const GAP_INCR_COUNT: u32 = 1;
 const MAX_PIPES: usize = 4;
 const PIPE_SPEED: i16 = 5;
 const MENU_TICKS: u64 = 20;
@@ -89,7 +90,7 @@ impl App for FlappyBirdApp {
                 }
             };
 
-            let mut level_select: usize;
+            let level_select: usize;
             let mut selection: usize = 0;
             let mut game = Game::new();
             let pipe_model = Rc::new(VecModel::from(game.ui_pipes()));
@@ -182,6 +183,7 @@ impl App for FlappyBirdApp {
                     {
                         Either::First(()) => {
                             game.jump();
+                            drop(button_pressed);
                             button_pressed = button.wait_for_pressed();
                         }
                         Either::Second(()) => {
@@ -208,7 +210,8 @@ impl App for FlappyBirdApp {
                 ui.set_selection(selection as i32);
                 drop(tick);
                 tick = ticker.next();
-                let mut button_pressed = button.wait_for_pressed();
+                drop(button_pressed);
+                button_pressed = button.wait_for_pressed();
                 selection = 0;
 
                 'game_over: loop {
@@ -284,7 +287,8 @@ impl App for FlappyBirdApp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MovingPipe {
     x: i16,
-    y: i16,
+    y_top: i16,
+    y_bot: i16,
 }
 
 // All the vallues from the game
@@ -296,6 +300,7 @@ struct Game {
     bird_falling: bool,
     bird_flap_tick: u32,
     bird_flap: bool,
+    spawn_gap: i16,
     tick: u32,
     low_grapics: bool,
     rng: SmallRng,
@@ -312,6 +317,7 @@ impl Game {
             bird_flap_tick: 0,
             bird_flap: false,
             bird_falling: false,
+            spawn_gap: PIPE_GAP,
             tick: 0,
             low_grapics: true,
             rng: SmallRng::seed_from_u64(Instant::now().as_micros()),
@@ -353,7 +359,7 @@ impl Game {
             // Check if the pipe is in the range of the bird on the x axis
             if (pipe.x < BIRD_X + PIPE_WIDTH / 2) && (pipe.x > BIRD_X - PIPE_WIDTH / 2) {
                 // Then check if it is touching one of the pipes
-                if (self.bird_y > pipe.y + (PIPE_GAP / 2)) || (self.bird_y < (pipe.y - PIPE_GAP / 2)) {
+                if (self.bird_y > pipe.y_bot) || (self.bird_y < pipe.y_top) {
                     died = true;
                 }
             }
@@ -388,13 +394,16 @@ impl Game {
 
     // The function for spawning in new pipes
     fn spawn_pipe(&mut self) {
-        let spawn_y: i16 = self.rng.random_range(20..181);
-        let _ = self.pipes.push(MovingPipe { x: SPAWN_X, y: spawn_y });
+        let spawn_y: i16 = self.rng.random_range(0..(181 - self.spawn_gap));
+        let _ = self.pipes.push(MovingPipe { x: SPAWN_X, y_top: spawn_y, y_bot: spawn_y + self.spawn_gap});
     }
 
     // A function for adding a point when a pipe goes away
     fn add_point(&mut self) {
         self.count += 1;
+        if self.count % GAP_INCR_COUNT == 0 {
+            self.spawn_gap -= 1;
+        }
     }
 
     // Idk yet what this does :skulk:
@@ -403,8 +412,8 @@ impl Game {
             .iter()
             .map(|pipe| GamePipe {
                 x_pos: i32::from(pipe.x),
-                top_y_pos: i32::from(pipe.y) - i32::from(PIPE_GAP) / 2,
-                bot_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
+                top_y_pos: i32::from(pipe.y_top),
+                bot_y_pos: i32::from(pipe.y_bot),
             })
             .collect()
     }
@@ -418,8 +427,8 @@ fn sync_pipe_model(model: &VecModel<GamePipe>, game: &Game) {
     for (index, pipe) in game.pipes.iter().enumerate() {
         let ui_pipe = GamePipe {
             x_pos: i32::from(pipe.x),
-            top_y_pos: i32::from(pipe.y) - i32::from(PIPE_GAP) / 2,
-            bot_y_pos: i32::from(pipe.y) + i32::from(PIPE_GAP) / 2,
+            top_y_pos: i32::from(pipe.y_top),
+            bot_y_pos: i32::from(pipe.y_bot),
         }; 
         if index < model.row_count() {
             model.set_row_data(index, ui_pipe);
