@@ -205,14 +205,14 @@ impl App for FlappyBirdApp {
                     }
                 }
 
+                selection = 0;
+                ui.set_selection(selection as i32);
                 ui.set_selected(false);
                 ui.set_has_died(true);
-                ui.set_selection(selection as i32);
                 drop(tick);
                 tick = ticker.next();
                 drop(button_pressed);
                 button_pressed = button.wait_for_pressed();
-                selection = 0;
 
                 'game_over: loop {
                     let _select = match select(
