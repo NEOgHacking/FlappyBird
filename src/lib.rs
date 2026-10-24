@@ -34,7 +34,7 @@ const BIRD_X: i16 = 40;
 const SPAWN_X: i16 = 330;
 const SPAWN_INTERVAL: u32 = 35;
 const GRAVITY: i16 = 1;
-const JUMP_SPEED: i16 = 6;
+const JUMP_SPEED: i16 = 7;
 const FLAP_TICKS: u32 = 3;
 const DEATH_FLOOR: i16 = 180;
 const PIPE_WIDTH: i16 = 46;
@@ -280,7 +280,7 @@ impl Game {
             bird_flap: false,
             bird_falling: false,
             tick: 0,
-            low_grapics: false,
+            low_grapics: true,
             rng: SmallRng::seed_from_u64(Instant::now().as_micros()),
         }; 
 
@@ -309,8 +309,8 @@ impl Game {
             pipe.x -= PIPE_SPEED;
         }
 
-        // Update the birds posistion
-        self.bird_speed += GRAVITY;
+        // Update the birds posistion with the speed calculations
+        self.bird_speed = (self.bird_speed + GRAVITY).clamp(-JUMP_SPEED, JUMP_SPEED);
         self.bird_y = (self.bird_y + self.bird_speed).max(0);
         self.bird_falling = self.bird_speed > 0;
 

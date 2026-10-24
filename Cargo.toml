@@ -3,6 +3,7 @@ name = "flappy-bird"
 version = "0.1.0"
 edition = "2024"
 
+
 [dependencies]
 heapless = "0.9"
 rand = { version = "0.10", default-features = false }   
