@@ -116,10 +116,6 @@ impl App for FlappyBirdApp {
 
                 if button.is_pressed() {
                     held_ms += MENU_TICKS;
-                    if held_ms >= LONG_PRESS_TIME as u64 {
-                        ui.set_selected(true);
-                    }
-                } else {
                     if held_ms > 0 {
                         // If the button was held for more than LONG_PRESS_TIME ms, we exit from the selection menu
                         if held_ms >= LONG_PRESS_TIME as u64 {
@@ -131,17 +127,19 @@ impl App for FlappyBirdApp {
                                 level_select = selection;
                                 break 'select;
                             }
-                        } else {
-                            // If the press was shorter than LONG_PRESS_TIME ms, we move to the next level difficulty
-                            // If we are at the last level, we go back to the beginning
-                            if selection > 2 {
-                                selection = 0;
-                            } else {
-                                selection += 1;
-                            }
                         }
-                        held_ms = 0;
                     }
+                } else {
+                    if held_ms > 0 {
+                        // If the press was shorter than LONG_PRESS_TIME ms, we move to the next level difficulty
+                        // If we are at the last level, we go back to the beginning
+                        if selection > 2 {
+                            selection = 0;
+                        } else {
+                            selection += 1;
+                        }
+                    }
+                    held_ms = 0;
                 }
 
                 tick_menu = ticker_menu.next();
@@ -158,12 +156,21 @@ impl App for FlappyBirdApp {
                 // Finally retake the button to wait for a press
             }
 
+            ui.set_level_select(false);
+            ui.set_explainer(true);
+            while button.is_pressed() {
+                Timer::after_millis(20).await;
+            }
+            while !button.is_pressed() {
+                Timer::after_millis(20).await;
+            }
+            ui.set_explainer(false);
+
             // The main loop that cycles the game
             'run: loop {
 
                 // Then start the game up
                 // First turn off the level select menu
-                ui.set_level_select(false);
                 ui.set_has_died(false);
 
                 game = Game::new();
@@ -313,7 +320,7 @@ impl Game {
             pipes: FixedVec::new(),
             count: 0,
             bird_y: 100,
-            bird_speed: 0,
+            bird_speed: -6,
             bird_flap_tick: 0,
             bird_flap: false,
             bird_falling: false,

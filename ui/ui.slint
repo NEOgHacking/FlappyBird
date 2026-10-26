@@ -24,6 +24,7 @@ export component FlappyBirdUI inherits Window {
     in property <bool> level-select: true;
     in property <int> selection: 0;
     in property <bool> selected: false;
+    in property <bool> explainer: false;
     in property <bool> has-died: false;
     in property <bool> low-grapics: true;
 
@@ -132,7 +133,7 @@ export component FlappyBirdUI inherits Window {
     }
 
     // Count
-    Text {
+    if !root.level-select && !root.explainer && !root.has-died: Text {
         width: root.width - 16px;
         x: 8px;
         y: 8px;
@@ -259,6 +260,28 @@ export component FlappyBirdUI inherits Window {
             border-radius: 7px;
         }
         transform-rotation: root.bird-falling == true ? 45deg : 0deg;
+    }
+
+    if root.explainer: Rectangle {
+        width: 240px;
+        height: 200px;
+        y: 30px;
+        background: #c7c71c;
+        border-radius: 15px;
+        border-width: 5px;
+        border-color: #ffff00;
+
+        Text {
+            width: parent.width - 24px;
+            height: parent.height;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            text: "The game only uses 1 button to flap the bird up. This is the A button. Press A to start!";
+            wrap: word-wrap;
+            font-size: 25px;
+            font-weight: 700;
+            color: red;
+        }
     }
 
     // Death screen
